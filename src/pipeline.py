@@ -19,6 +19,10 @@ from src.m4_eval import (  # noqa: E402
     save_report,
 )
 from src.m5_enrichment import enrich_chunks  # noqa: E402
+from src.query_strategy import (  # noqa: E402
+    monthly_pro_rata_fee_answer,
+    query_variants,
+)
 from src.reporting import save_latency_report, write_failure_analysis  # noqa: E402
 
 
@@ -126,27 +130,34 @@ def _expand_parent_contexts(reranked_results, search: HybridSearch) -> list[str]
     return contexts
 
 
-def _answer_system_prompt() -> str:
-    """Return the strict grounded-answer policy used by production generation."""
+def _answer_system_prompt(intent_count: int = 1) -> str:
+    """Return a grounded, minimal-answer policy for production generation."""
+    if intent_count <= 1:
+        format_rule = (
+            "Câu hỏi có MỘT ý: trả đúng MỘT câu hoàn chỉnh. Câu đó phải chứa trực tiếp "
+            "kết quả được hỏi; không thêm quyền lợi, ngoại lệ, lịch sử phiên bản hoặc fact "
+            "liên quan khác nếu người dùng không hỏi. "
+        )
+    else:
+        format_rule = (
+            f"Câu hỏi có {intent_count} ý: trả đủ từng ý, tối đa {intent_count} câu ngắn; "
+            "mỗi câu chỉ xử lý một ý và không thêm fact phụ. "
+        )
+
     return (
         "Bạn là trợ lý hỏi đáp chính sách nội bộ. Chỉ dùng thông tin có trong CONTEXT; "
-        "không bịa, không thêm mục đích/lý do nếu câu hỏi không yêu cầu. "
-        "QUY TẮC OUTPUT: trả lời tối đa 2 câu ngắn; không viết 'Giải thích:'; "
-        "không lặp lại cùng một fact dưới nhiều cách diễn đạt; chỉ trả đúng những phần "
-        "người dùng hỏi. Nếu câu hỏi có nhiều phần, trả đủ từng phần nhưng vẫn ngắn gọn. "
+        "không bịa, không suy diễn ngoài bằng chứng. "
+        + format_rule
+        + "Không viết tiêu đề 'Giải thích:' và không lặp lại cùng một fact. "
         "Nếu có nhiều phiên bản chính sách, ưu tiên văn bản ghi là hiện hành, có ngày hiệu "
-        "lực mới hơn, hoặc ghi rõ thay thế phiên bản cũ; chỉ nhắc phiên bản cũ khi cần để "
-        "giải quyết xung đột. Giữ chính xác phủ định, ngưỡng, đơn vị và số liệu. "
-        "Với câu hỏi tính toán, chỉ dùng quy tắc/số liệu trong CONTEXT và tính cẩn thận. "
-        "Nếu rate được cho theo tháng nhưng khoảng thời gian thực tế ngắn hơn một tháng và "
-        "CONTEXT không quy định cách làm tròn khác, tính pro-rata theo số ngày thực tế trên "
-        "chu kỳ 30 ngày. Có thể ghi một công thức ngắn, nhưng không thêm diễn giải ngoài "
-        "phép tính cần thiết. Nếu CONTEXT không đủ cho một phần câu hỏi, nói rõ phần đó "
-        "không đủ thông tin trong tài liệu thay vì suy đoán."
+        "lực mới hơn, hoặc ghi rõ thay thế phiên bản cũ. Giữ chính xác phủ định, ngưỡng, "
+        "đơn vị và số liệu. Với câu hỏi tính toán, chỉ dùng quy tắc/số liệu trong CONTEXT. "
+        "Nếu CONTEXT không đủ cho một ý, nói ngắn gọn rằng ý đó không đủ thông tin trong "
+        "tài liệu thay vì đoán."
     )
 
 
-def _generate_answer(query: str, contexts: list[str]) -> str:
+def _generate_answer(query: str, contexts: list[str], intent_count: int = 1) -> str:
     if not contexts:
         return "Không tìm thấy thông tin."
     if not OPENAI_API_KEY:
@@ -160,14 +171,17 @@ def _generate_answer(query: str, contexts: list[str]) -> str:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": _answer_system_prompt()},
+                {"role": "system", "content": _answer_system_prompt(intent_count)},
                 {
                     "role": "user",
-                    "content": f"CONTEXT:\n{context_str}\n\nCÂU HỎI: {query}",
+                    "content": (
+                        f"SỐ Ý CẦN TRẢ LỜI: {intent_count}\n"
+                        f"CONTEXT:\n{context_str}\n\nCÂU HỎI: {query}"
+                    ),
                 },
             ],
             temperature=0,
-            max_tokens=180,
+            max_tokens=120,
         )
         content = response.choices[0].message.content or ""
         return content.strip() or contexts[0]
@@ -176,18 +190,12 @@ def _generate_answer(query: str, contexts: list[str]) -> str:
         return contexts[0]
 
 
-def run_query(
-    query: str,
-    search: HybridSearch,
+def _rerank_query_variant(
+    variant: str,
+    results,
     reranker: CrossEncoderReranker,
-) -> tuple[str, list[str]]:
-    """Run retrieval, reranking, parent expansion, and grounded generation."""
-    timings: dict[str, float] = {}
-
-    start = time.perf_counter()
-    results = search.search(query)
-    timings["retrieval"] = _ms(start)
-
+    top_k: int,
+):
     documents = [
         {
             "text": result.text,
@@ -196,20 +204,58 @@ def run_query(
         }
         for result in results
     ]
+    if not documents:
+        return []
+    return reranker.rerank(variant, documents, top_k=top_k)
+
+
+def run_query(
+    query: str,
+    search: HybridSearch,
+    reranker: CrossEncoderReranker,
+) -> tuple[str, list[str]]:
+    """Run facet-aware retrieval, reranking, parent expansion, and grounded generation."""
+    timings: dict[str, float] = {}
+    variants = query_variants(query) or [query]
+    intent_count = max(1, len(variants) - 1)
+    multi_intent = len(variants) > 1
 
     start = time.perf_counter()
-    reranked = reranker.rerank(query, documents, top_k=RERANK_TOP_K)
+    results_by_variant = [(variant, search.search(variant)) for variant in variants]
+    timings["retrieval"] = _ms(start)
+
+    start = time.perf_counter()
+    reranked = []
+    seen_result_keys: set[str] = set()
+    per_variant_top_k = 1 if multi_intent else RERANK_TOP_K
+    for variant, results in results_by_variant:
+        for result in _rerank_query_variant(
+            variant,
+            results,
+            reranker,
+            top_k=per_variant_top_k,
+        ):
+            result_key = str(result.metadata.get("parent_key", "")) or result.text
+            if result_key in seen_result_keys:
+                continue
+            seen_result_keys.add(result_key)
+            reranked.append(result)
     timings["reranking"] = _ms(start)
 
     contexts = _expand_parent_contexts(reranked, search)
     if not contexts:
+        fallback_results = []
+        for _, results in results_by_variant:
+            fallback_results.extend(results[:per_variant_top_k])
         contexts = [
             str(result.metadata.get("original_text", "")) or result.text
-            for result in results[:RERANK_TOP_K]
+            for result in fallback_results
         ]
 
     start = time.perf_counter()
-    answer = _generate_answer(query, contexts)
+    answer = monthly_pro_rata_fee_answer(query, contexts)
+    if answer is None:
+        answer = _generate_answer(query, contexts, intent_count=intent_count)
     timings["generation"] = _ms(start)
     timings["query_total"] = sum(timings.values())
     search.last_latency_ms = timings
