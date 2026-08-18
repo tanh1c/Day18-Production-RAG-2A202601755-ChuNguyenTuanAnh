@@ -1,0 +1,67 @@
+name: Lab18 CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/lab18-full-score
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  TOKENIZERS_PARALLELISM: "false"
+  HF_HOME: ~/.cache/huggingface
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+jobs:
+  test:
+    name: Unit tests and rubric checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-py311-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            hf-${{ runner.os }}-py311-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff
+
+      - name: Run public tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Ruff
+        run: ruff check src/ check_lab.py main.py naive_baseline.py
+
+      - name: Enforce zero TODO markers in graded modules
+        shell: bash
+        run: |
+          if grep -RIn --include='m*.py' '# TODO:' src/; then
+            echo 'Found unresolved TODO markers in graded modules.'
+            exit 1
+          fi
+          echo 'No unresolved TODO markers.'
+
+      - name: Compile all Python sources
+        run: python -m compileall -q src tests config.py main.py naive_baseline.py check_lab.py
