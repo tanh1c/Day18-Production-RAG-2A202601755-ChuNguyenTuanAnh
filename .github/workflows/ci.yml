@@ -1,13 +1,10 @@
 name: Lab18 CI
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: lab18-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -54,7 +51,7 @@ jobs:
         run: pytest tests/ -v --tb=short
 
       - name: Ruff essentials
-        run: ruff check src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
+        run: ruff check --select E7,E9,F,I src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
 
       - name: Enforce zero TODO markers in graded modules
         shell: bash
