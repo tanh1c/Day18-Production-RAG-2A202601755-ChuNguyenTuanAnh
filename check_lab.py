@@ -1,142 +1,158 @@
-"""
-Kiểm tra định dạng bài nộp trước khi submit.
-Chạy: python check_lab.py
-
-⚠️ Lỗi định dạng khiến script chấm tự động không chạy → trừ 5 điểm thủ tục.
-"""
+"""Validate Lab 18 deliverables before submission."""
 
 import json
 import os
-import sys
+import re
 import subprocess
+import sys
+
+SOURCE_FILES = [
+    "src/m1_chunking.py",
+    "src/m2_search.py",
+    "src/m3_rerank.py",
+    "src/m4_eval.py",
+    "src/m5_enrichment.py",
+    "src/pipeline.py",
+]
 
 
 def check_file(path: str, required: bool = True) -> bool:
     if os.path.exists(path):
         print(f"  ✅ {path}")
         return True
-    elif required:
+    if required:
         print(f"  ❌ THIẾU: {path}")
         return False
-    else:
-        print(f"  ⚠️  Optional: {path}")
-        return True
+    print(f"  ⚠️  Optional: {path}")
+    return True
 
 
 def check_json(path: str, required_keys: list[str]) -> bool:
     try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        missing = [k for k in required_keys if k not in data]
-        if missing:
-            print(f"  ❌ {path} thiếu keys: {missing}")
-            return False
-        print(f"  ✅ {path} — keys OK")
-        return True
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        print(f"  ❌ {path} — {e}")
+        with open(path, encoding="utf-8") as file_obj:
+            data = json.load(file_obj)
+    except (json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"  ❌ {path} — {exc}")
         return False
+
+    missing = [key for key in required_keys if key not in data]
+    if missing:
+        print(f"  ❌ {path} thiếu keys: {missing}")
+        return False
+    print(f"  ✅ {path} — keys OK")
+    return True
 
 
 def check_todos() -> int:
-    """Count remaining TODO markers in src/."""
+    """Count unresolved starter markers in graded module files."""
     count = 0
-    for root, _, files in os.walk("src"):
-        for f in files:
-            if f.endswith(".py"):
-                with open(os.path.join(root, f), encoding="utf-8") as fh:
-                    for line in fh:
-                        if "# TODO:" in line:
-                            count += 1
+    for path in SOURCE_FILES:
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as file_obj:
+            count += sum(1 for line in file_obj if "# TODO:" in line)
     return count
 
 
-def run_tests() -> tuple[int, int]:
-    """Run pytest and return (passed, total)."""
+def run_tests() -> tuple[int, int, int]:
+    """Run pytest and return (passed, failed, exit_code)."""
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=no", "-q"],
-            capture_output=True, text=True, timeout=120,
+            [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=short"],
+            capture_output=True,
+            text=True,
+            timeout=1200,
+            check=False,
         )
-        lines = result.stdout.strip().split("\n")
-        summary = lines[-1] if lines else ""
-        # Parse "X passed, Y failed" or "X passed"
-        passed = total = 0
-        for part in summary.split(","):
-            part = part.strip()
-            if "passed" in part:
-                passed = int(part.split()[0])
-                total += passed
-            if "failed" in part:
-                total += int(part.split()[0])
-        return passed, total
-    except Exception as e:
-        print(f"  ⚠️  pytest error: {e}")
-        return 0, 0
+    except Exception as exc:
+        print(f"  ❌ pytest error: {exc}")
+        return 0, 0, 1
+
+    output = f"{result.stdout}\n{result.stderr}"
+    passed_match = re.search(r"(\d+) passed", output)
+    failed_match = re.search(r"(\d+) failed", output)
+    passed = int(passed_match.group(1)) if passed_match else 0
+    failed = int(failed_match.group(1)) if failed_match else 0
+    if result.returncode != 0:
+        print(output[-3000:])
+    return passed, failed, result.returncode
 
 
-def validate():
+def validate() -> int:
     print("🔍 Kiểm tra bài nộp Lab 18: Production RAG\n")
     errors = 0
 
-    # 1. Source files
     print("📁 Source code:")
-    for f in ["src/m1_chunking.py", "src/m2_search.py", "src/m3_rerank.py",
-              "src/m4_eval.py", "src/pipeline.py"]:
-        if not check_file(f):
+    for path in SOURCE_FILES:
+        if not check_file(path):
             errors += 1
 
-    # 2. Reports
     print("\n📊 Reports:")
-    if check_file("reports/ragas_report.json"):
-        if not check_json("reports/ragas_report.json", ["aggregate", "num_questions"]):
-            errors += 1
-    else:
+    report_path = "reports/ragas_report.json"
+    if not check_file(report_path):
         errors += 1
-    check_file("reports/naive_baseline_report.json", required=False)
+    elif not check_json(report_path, ["aggregate", "num_questions", "failures"]):
+        errors += 1
 
-    # 3. Analysis
+    baseline_path = "reports/naive_baseline_report.json"
+    if not check_file(baseline_path):
+        errors += 1
+    elif not check_json(baseline_path, ["aggregate", "num_questions"]):
+        errors += 1
+
+    latency_path = "reports/latency_report.json"
+    if not check_file(latency_path):
+        errors += 1
+    elif not check_json(latency_path, ["unit", "timings"]):
+        errors += 1
+    if not check_file("reports/latency_report.md"):
+        errors += 1
+
     print("\n📝 Analysis:")
-    check_file("analysis/failure_analysis.md")
-    check_file("analysis/group_report.md")
+    if not check_file("analysis/failure_analysis.md"):
+        errors += 1
+    check_file("analysis/group_report.md", required=False)
 
-    # 4. Individual reflections
-    print("\n👤 Individual reflections:")
+    print("\n👤 Individual reflection:")
+    reflection_dir = "analysis/reflections"
     reflections = []
-    ref_dir = "analysis/reflections"
-    if os.path.isdir(ref_dir):
-        reflections = [f for f in os.listdir(ref_dir) if f.startswith("reflection_") and f.endswith(".md")]
-    if reflections:
-        for r in reflections:
-            print(f"  ✅ {ref_dir}/{r}")
+    if os.path.isdir(reflection_dir):
+        reflections = sorted(
+            filename
+            for filename in os.listdir(reflection_dir)
+            if filename.startswith("reflection_") and filename.endswith(".md")
+        )
+    if not reflections:
+        print(f"  ❌ Chưa có reflection cá nhân trong {reflection_dir}/")
+        errors += 1
     else:
-        print(f"  ⚠️  Chưa có file reflection cá nhân trong {ref_dir}/")
+        for reflection in reflections:
+            print(f"  ✅ {reflection_dir}/{reflection}")
 
-    # 5. TODO count
     print("\n🔧 TODO markers:")
     todo_count = check_todos()
     if todo_count == 0:
-        print("  ✅ Không còn TODO nào")
+        print("  ✅ Không còn TODO marker trong graded modules")
     else:
-        print(f"  ⚠️  Còn {todo_count} TODO chưa implement")
+        print(f"  ❌ Còn {todo_count} TODO marker")
+        errors += 1
 
-    # 6. Tests
     print("\n🧪 Auto-tests:")
-    passed, total = run_tests()
-    if total > 0:
-        pct = passed / total * 100
-        print(f"  {'✅' if pct >= 80 else '⚠️'} {passed}/{total} tests passed ({pct:.0f}%)")
+    passed, failed, test_exit = run_tests()
+    if test_exit == 0 and failed == 0 and passed > 0:
+        print(f"  ✅ {passed} tests passed, 0 failed")
     else:
-        print("  ⚠️  Không chạy được tests")
+        print(f"  ❌ pytest exit={test_exit}, passed={passed}, failed={failed}")
+        errors += 1
 
-    # 7. Summary
     print("\n" + "=" * 50)
     if errors == 0:
         print("🚀 Bài lab sẵn sàng để nộp!")
     else:
-        print(f"❌ Có {errors} lỗi. Sửa trước khi nộp.")
+        print(f"❌ Có {errors} lỗi cần sửa trước khi nộp.")
     print("=" * 50)
+    return 0 if errors == 0 else 1
 
 
 if __name__ == "__main__":
-    validate()
+    raise SystemExit(validate())
