@@ -6,9 +6,9 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 
 | Metric | Naive Baseline | Production | Δ |
 |---|---:|---:|---:|
-| faithfulness | 0.7803 | 0.8375 | +0.0572 |
-| answer_relevancy | 0.7236 | 0.8355 | +0.1119 |
-| context_precision | 0.9250 | 0.9417 | +0.0167 |
+| faithfulness | 0.8183 | 0.8958 | +0.0775 |
+| answer_relevancy | 0.7662 | 0.8401 | +0.0739 |
+| context_precision | 0.9250 | 0.9500 | +0.0250 |
 | context_recall | 0.9250 | 0.9750 | +0.0500 |
 
 ## Diagnostic Error Tree
@@ -20,17 +20,7 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 
 ## Bottom-5 Failures
 
-### #1 — Lương thử việc của nhân viên Junior mức cao nhất là bao nhiêu?
-
-- **Expected:** Junior cao nhất là 20.000.000 VNĐ/tháng. Lương thử việc = 85% x 20.000.000 = 17.000.000 VNĐ/tháng.
-- **Got:** Lương thử việc của nhân viên Junior mức cao nhất là 17.000.000 VNĐ/tháng.
-- **Metrics:** faithfulness `0.0000`, answer_relevancy `0.8241`, context_precision `1.0000`, context_recall `1.0000`
-- **Worst metric:** `faithfulness` = `0.0000`
-- **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
-- **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
-- **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
-
-### #2 — Nhân viên tạm ứng 15 triệu, sau 20 ngày mới thanh toán. Bị phạt bao nhiêu?
+### #1 — Nhân viên tạm ứng 15 triệu, sau 20 ngày mới thanh toán. Bị phạt bao nhiêu?
 
 - **Expected:** Thời hạn thanh toán là 15 ngày. Quá hạn 5 ngày, bị tính phí 2%/tháng trên 15.000.000 VNĐ = 300.000 VNĐ/tháng (tính pro-rata khoảng 50.000 VNĐ cho 5 ngày).
 - **Got:** Khoản tạm ứng quá hạn 5 ngày; phí phạt pro-rata là 50.000 VNĐ (15.000.000 × 2% = 300.000 VNĐ/tháng; 5/30 tháng).
@@ -40,43 +30,53 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 - **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
 
-### #3 — Thâm niên bao nhiêu năm thì được cộng thêm ngày phép?
+### #2 — Thâm niên bao nhiêu năm thì được cộng thêm ngày phép?
 
 - **Expected:** Theo chính sách v2024 hiện hành, nhân viên có thâm niên từ 3 năm trở lên được cộng thêm 1 ngày phép cho mỗi 3 năm. Chính sách cũ v2023 yêu cầu 5 năm.
 - **Got:** Nhân viên có thâm niên từ **3 năm trở lên** được cộng thêm **1 ngày phép** cho mỗi 3 năm làm việc liên tục.
-- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.7902`, context_precision `0.5000`, context_recall `1.0000`
+- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.7898`, context_precision `0.5000`, context_recall `1.0000`
 - **Worst metric:** `context_precision` = `0.5000`
 - **Error Tree:** Output sai/chưa đủ → kiểm tra `context_precision` → Retrieval precision failure: irrelevant chunks remain in the final context.
 - **Root cause:** Retrieval precision failure: irrelevant chunks remain in the final context.
 - **Suggested fix:** Improve cross-encoder reranking, metadata/version filtering, or reduce final context count.
 
-### #4 — Nhân viên được tài trợ khóa học 25 triệu, nghỉ việc sau 8 tháng hoàn thành khóa học. Phải hoàn trả bao nhiêu?
+### #3 — Nhân viên được tài trợ khóa học 25 triệu, nghỉ việc sau 8 tháng hoàn thành khóa học. Phải hoàn trả bao nhiêu?
 
 - **Expected:** Nhân viên phải cam kết làm việc ít nhất 1 năm sau khi hoàn thành khóa học. Nghỉ sau 8 tháng là trước hạn cam kết, phải hoàn trả 100% chi phí tức 25.000.000 VNĐ.
 - **Got:** Nhân viên phải hoàn trả 100% chi phí đào tạo đã được tài trợ, tức là 25 triệu VNĐ.
-- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.7960`, context_precision `1.0000`, context_recall `1.0000`
+- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.7995`, context_precision `1.0000`, context_recall `1.0000`
 - **Worst metric:** `faithfulness` = `0.5000`
 - **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
 
-### #5 — Có cần kích hoạt xác thực đa yếu tố (MFA) không?
+### #4 — Nghỉ phép không lương 20 ngày cần ai phê duyệt?
 
-- **Expected:** Có, theo chính sách mật khẩu v2.0 hiện hành, tất cả nhân viên bắt buộc kích hoạt MFA cho email, VPN và hệ thống nội bộ. Chính sách cũ v1.0 không yêu cầu MFA.
-- **Got:** Có, tất cả nhân viên bắt buộc phải kích hoạt MFA cho tài khoản email, VPN và các hệ thống nội bộ.
-- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.8079`, context_precision `1.0000`, context_recall `0.5000`
-- **Worst metric:** `context_recall` = `0.5000`
-- **Error Tree:** Output sai/chưa đủ → kiểm tra `context_recall` → Retrieval recall failure: one or more ground-truth facts are missing from retrieved chunks.
-- **Root cause:** Retrieval recall failure: one or more ground-truth facts are missing from retrieved chunks.
-- **Suggested fix:** Improve chunking, hybrid retrieval, parent expansion, or increase candidate recall before reranking.
+- **Expected:** Nghỉ 16-30 ngày cần phê duyệt của Giám đốc điều hành (CEO). Lưu ý: nghỉ trên 14 ngày không lương, nhân viên phải tự đóng phần bảo hiểm của mình.
+- **Got:** Nghỉ phép không lương 20 ngày cần phê duyệt của Giám đốc điều hành (CEO).
+- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.8156`, context_precision `1.0000`, context_recall `1.0000`
+- **Worst metric:** `faithfulness` = `0.5000`
+- **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
+- **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
+- **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
+
+### #5 — Bao lâu phải đổi mật khẩu một lần?
+
+- **Expected:** Theo chính sách hiện hành (v2.0), mật khẩu phải được thay đổi mỗi 120 ngày. Chính sách cũ yêu cầu 90 ngày nhưng đã bị thay thế.
+- **Got:** Mật khẩu phải được thay đổi mỗi 120 ngày.
+- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.8201`, context_precision `0.5000`, context_recall `1.0000`
+- **Worst metric:** `context_precision` = `0.5000`
+- **Error Tree:** Output sai/chưa đủ → kiểm tra `context_precision` → Retrieval precision failure: irrelevant chunks remain in the final context.
+- **Root cause:** Retrieval precision failure: irrelevant chunks remain in the final context.
+- **Suggested fix:** Improve cross-encoder reranking, metadata/version filtering, or reduce final context count.
 
 ## Case Study
 
-**Question:** Lương thử việc của nhân viên Junior mức cao nhất là bao nhiêu?
+**Question:** Nhân viên tạm ứng 15 triệu, sau 20 ngày mới thanh toán. Bị phạt bao nhiêu?
 
-**Expected:** Junior cao nhất là 20.000.000 VNĐ/tháng. Lương thử việc = 85% x 20.000.000 = 17.000.000 VNĐ/tháng.
+**Expected:** Thời hạn thanh toán là 15 ngày. Quá hạn 5 ngày, bị tính phí 2%/tháng trên 15.000.000 VNĐ = 300.000 VNĐ/tháng (tính pro-rata khoảng 50.000 VNĐ cho 5 ngày).
 
-**Got:** Lương thử việc của nhân viên Junior mức cao nhất là 17.000.000 VNĐ/tháng.
+**Got:** Khoản tạm ứng quá hạn 5 ngày; phí phạt pro-rata là 50.000 VNĐ (15.000.000 × 2% = 300.000 VNĐ/tháng; 5/30 tháng).
 
 ### Error Tree walkthrough
 
