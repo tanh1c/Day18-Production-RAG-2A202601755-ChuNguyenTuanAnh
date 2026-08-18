@@ -1,10 +1,26 @@
 name: Full RAG Evaluation
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/full-evaluation.yml"
+      - "pyproject.toml"
+      - "src/**"
+      - "scripts/**"
+      - "analysis/**"
+      - "config.py"
+      - "main.py"
+      - "naive_baseline.py"
+      - "check_lab.py"
+      - "requirements.txt"
+      - "test_set.json"
+      - "data/**"
   workflow_dispatch:
 
 concurrency:
-  group: full-rag-${{ github.ref }}
+  group: full-rag-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -99,7 +115,7 @@ jobs:
       - name: Static rubric checks
         shell: bash
         run: |
-          ruff check --select E,F,I --ignore E402 src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
+          ruff check src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
           if grep -RIn --include='m*.py' '# TODO:' src/; then
             echo "Unresolved TODO marker found."
             exit 1
