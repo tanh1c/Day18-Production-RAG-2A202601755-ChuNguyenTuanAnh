@@ -1,13 +1,10 @@
 name: Lab18 CI
 
 on:
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: lab18-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
