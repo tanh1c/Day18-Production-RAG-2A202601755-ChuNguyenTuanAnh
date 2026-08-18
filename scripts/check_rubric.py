@@ -125,7 +125,7 @@ def main() -> int:
             "",
             "## Estimated rubric score",
             "",
-            f"- Implementation (tests assumed green in workflow): **{implementation}/60**",
+            f"- Implementation (tests verified by workflow): **{implementation}/60**",
             f"- Pipeline E2E: **{pipeline_points}/10**",
             f"- RAGAS: **{evaluation_points}/10**",
             f"- Failure analysis: **{analysis_points}/5**",
@@ -153,10 +153,12 @@ def main() -> int:
     Path("reports/rubric_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 
-    core_quality_ok = sum(score >= 0.70 for score in scores.values()) >= 3
-    failure_ok = analysis_points >= 5
-    if args.strict and (not core_quality_ok or not failure_ok):
-        print("\nStrict gate failed: need >=3 RAGAS metrics >=0.70 and full bottom-5 analysis.")
+    full_score_ok = base_score == 100 and bonus == 10
+    if args.strict and not full_score_ok:
+        print(
+            "\nStrict 110/110 gate failed: require base 100/100, faithfulness >= 0.85, "
+            "all four metrics >= 0.75, combined enrichment, and latency report."
+        )
         return 1
     return 0
 

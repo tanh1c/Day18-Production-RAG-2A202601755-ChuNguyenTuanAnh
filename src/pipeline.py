@@ -126,6 +126,26 @@ def _expand_parent_contexts(reranked_results, search: HybridSearch) -> list[str]
     return contexts
 
 
+def _answer_system_prompt() -> str:
+    """Return the strict grounded-answer policy used by production generation."""
+    return (
+        "Bạn là trợ lý hỏi đáp chính sách nội bộ. Chỉ dùng thông tin có trong CONTEXT; "
+        "không bịa, không thêm mục đích/lý do nếu câu hỏi không yêu cầu. "
+        "QUY TẮC OUTPUT: trả lời tối đa 2 câu ngắn; không viết 'Giải thích:'; "
+        "không lặp lại cùng một fact dưới nhiều cách diễn đạt; chỉ trả đúng những phần "
+        "người dùng hỏi. Nếu câu hỏi có nhiều phần, trả đủ từng phần nhưng vẫn ngắn gọn. "
+        "Nếu có nhiều phiên bản chính sách, ưu tiên văn bản ghi là hiện hành, có ngày hiệu "
+        "lực mới hơn, hoặc ghi rõ thay thế phiên bản cũ; chỉ nhắc phiên bản cũ khi cần để "
+        "giải quyết xung đột. Giữ chính xác phủ định, ngưỡng, đơn vị và số liệu. "
+        "Với câu hỏi tính toán, chỉ dùng quy tắc/số liệu trong CONTEXT và tính cẩn thận. "
+        "Nếu rate được cho theo tháng nhưng khoảng thời gian thực tế ngắn hơn một tháng và "
+        "CONTEXT không quy định cách làm tròn khác, tính pro-rata theo số ngày thực tế trên "
+        "chu kỳ 30 ngày. Có thể ghi một công thức ngắn, nhưng không thêm diễn giải ngoài "
+        "phép tính cần thiết. Nếu CONTEXT không đủ cho một phần câu hỏi, nói rõ phần đó "
+        "không đủ thông tin trong tài liệu thay vì suy đoán."
+    )
+
+
 def _generate_answer(query: str, contexts: list[str]) -> str:
     if not contexts:
         return "Không tìm thấy thông tin."
@@ -140,26 +160,14 @@ def _generate_answer(query: str, contexts: list[str]) -> str:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Bạn là trợ lý hỏi đáp chính sách nội bộ. Chỉ trả lời bằng các fact "
-                        "có trong CONTEXT, không suy đoán. Trả lời trực tiếp câu hỏi trước, "
-                        "sau đó giải thích ngắn gọn nếu cần. Nếu có nhiều phiên bản chính sách, "
-                        "ưu tiên văn bản ghi là hiện hành, có ngày hiệu lực mới hơn, hoặc ghi rõ "
-                        "thay thế phiên bản cũ; chỉ nhắc phiên bản cũ khi cần làm rõ xung đột. "
-                        "Giữ chính xác phủ định, ngưỡng, đơn vị và số liệu. Với câu hỏi tính toán, "
-                        "chỉ tính từ quy tắc/số liệu xuất hiện trong context. Nếu context không đủ, "
-                        "nói rõ 'Không tìm thấy đủ thông tin trong tài liệu.'"
-                    ),
-                },
+                {"role": "system", "content": _answer_system_prompt()},
                 {
                     "role": "user",
                     "content": f"CONTEXT:\n{context_str}\n\nCÂU HỎI: {query}",
                 },
             ],
             temperature=0,
-            max_tokens=450,
+            max_tokens=180,
         )
         content = response.choices[0].message.content or ""
         return content.strip() or contexts[0]
@@ -262,7 +270,8 @@ def evaluate_pipeline(
 
     failures = failure_analysis(results.get("per_question", []), bottom_n=5)
     save_report(results, failures, path="reports/ragas_report.json")
-    write_failure_analysis(failures)
+    save_report(results, failures, path="ragas_report.json")
+    write_failure_analysis(failures, results=results)
 
     latency: dict[str, float] = dict(getattr(search, "build_timings_ms", {}))
     for key, values in query_timings.items():

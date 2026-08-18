@@ -43,6 +43,21 @@ def check_json(path: str, required_keys: list[str]) -> bool:
     return True
 
 
+def check_text_not_template(path: str, forbidden_markers: tuple[str, ...]) -> bool:
+    try:
+        with open(path, encoding="utf-8") as file_obj:
+            text = file_obj.read()
+    except OSError as exc:
+        print(f"  ❌ {path} — {exc}")
+        return False
+    found = [marker for marker in forbidden_markers if marker in text]
+    if found:
+        print(f"  ❌ {path} vẫn còn template markers: {found}")
+        return False
+    print(f"  ✅ {path} — nội dung đã được điền")
+    return True
+
+
 def check_todos() -> int:
     """Count unresolved starter markers in graded module files."""
     count = 0
@@ -88,11 +103,11 @@ def validate() -> int:
             errors += 1
 
     print("\n📊 Reports:")
-    report_path = "reports/ragas_report.json"
-    if not check_file(report_path) or not check_json(
-        report_path, ["aggregate", "num_questions", "failures"]
-    ):
-        errors += 1
+    for report_path in ("reports/ragas_report.json", "ragas_report.json"):
+        if not check_file(report_path) or not check_json(
+            report_path, ["aggregate", "num_questions", "failures"]
+        ):
+            errors += 1
 
     baseline_path = "reports/naive_baseline_report.json"
     if not check_file(baseline_path) or not check_json(
@@ -107,11 +122,21 @@ def validate() -> int:
         errors += 1
 
     print("\n📝 Analysis:")
-    if not check_file("analysis/failure_analysis.md"):
+    failure_path = "analysis/failure_analysis.md"
+    if not check_file(failure_path):
+        errors += 1
+    elif not check_text_not_template(
+        failure_path,
+        ("[Tên nhóm]", "[Tên 1", "(copy template)", "**Question:**\n- **Expected:**"),
+    ):
         errors += 1
     check_file("analysis/group_report.md", required=False)
 
     print("\n👤 Individual reflection:")
+    assignment_reflection = "analysis/reflection_ChuNguyenTuanAnh.md"
+    if not check_file(assignment_reflection):
+        errors += 1
+
     reflection_dir = "analysis/reflections"
     reflections = []
     if os.path.isdir(reflection_dir):
