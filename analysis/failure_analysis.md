@@ -6,10 +6,10 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 
 | Metric | Naive Baseline | Production | Δ |
 |---|---:|---:|---:|
-| faithfulness | 0.7903 | 0.8125 | +0.0222 |
-| answer_relevancy | 0.7206 | 0.8047 | +0.0842 |
-| context_precision | 0.9250 | 0.9500 | +0.0250 |
-| context_recall | 0.9250 | 0.9500 | +0.0250 |
+| faithfulness | 0.7803 | 0.8375 | +0.0572 |
+| answer_relevancy | 0.7236 | 0.8355 | +0.1119 |
+| context_precision | 0.9250 | 0.9417 | +0.0167 |
+| context_recall | 0.9250 | 0.9750 | +0.0500 |
 
 ## Diagnostic Error Tree
 
@@ -20,22 +20,22 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 
 ## Bottom-5 Failures
 
-### #1 — Một nhân viên Senior có 9 năm thâm niên được nghỉ bao nhiêu ngày phép năm và lương trong khoảng nào?
+### #1 — Lương thử việc của nhân viên Junior mức cao nhất là bao nhiêu?
 
-- **Expected:** Theo chính sách v2024: 15 ngày cơ bản + 3 ngày thâm niên (9÷3=3) = 18 ngày phép. Lương Senior (P3-P4): 20-35 triệu VNĐ/tháng.
-- **Got:** Nhân viên có 9 năm thâm niên được nghỉ **18 ngày phép năm** (15 + 3). Lương không được đề cập trong tài liệu, nên không có thông tin về khoảng lương.
-- **Metrics:** faithfulness `0.2500`, answer_relevancy `0.0000`, context_precision `1.0000`, context_recall `0.5000`
-- **Worst metric:** `answer_relevancy` = `0.0000`
-- **Error Tree:** Output sai/chưa đủ → kiểm tra `answer_relevancy` → Generation relevance failure: the answer does not directly address the user question.
-- **Root cause:** Generation relevance failure: the answer does not directly address the user question.
-- **Suggested fix:** Use a more explicit answer format and instruct the model to answer the requested quantity/decision first.
+- **Expected:** Junior cao nhất là 20.000.000 VNĐ/tháng. Lương thử việc = 85% x 20.000.000 = 17.000.000 VNĐ/tháng.
+- **Got:** Lương thử việc của nhân viên Junior mức cao nhất là 17.000.000 VNĐ/tháng.
+- **Metrics:** faithfulness `0.0000`, answer_relevancy `0.8241`, context_precision `1.0000`, context_recall `1.0000`
+- **Worst metric:** `faithfulness` = `0.0000`
+- **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
+- **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
+- **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
 
 ### #2 — Nhân viên tạm ứng 15 triệu, sau 20 ngày mới thanh toán. Bị phạt bao nhiêu?
 
 - **Expected:** Thời hạn thanh toán là 15 ngày. Quá hạn 5 ngày, bị tính phí 2%/tháng trên 15.000.000 VNĐ = 300.000 VNĐ/tháng (tính pro-rata khoảng 50.000 VNĐ cho 5 ngày).
-- **Got:** Nhân viên tạm ứng 15 triệu VNĐ, sau 20 ngày mới thanh toán sẽ bị phạt 2%/tháng. Số tiền phạt là 2% của 15 triệu VNĐ, tương đương 300.000 VNĐ.
-- **Metrics:** faithfulness `0.0000`, answer_relevancy `0.8945`, context_precision `1.0000`, context_recall `1.0000`
-- **Worst metric:** `faithfulness` = `0.0000`
+- **Got:** Khoản tạm ứng quá hạn 5 ngày; phí phạt pro-rata là 50.000 VNĐ (15.000.000 × 2% = 300.000 VNĐ/tháng; 5/30 tháng).
+- **Metrics:** faithfulness `0.2500`, answer_relevancy `0.7872`, context_precision `1.0000`, context_recall `1.0000`
+- **Worst metric:** `faithfulness` = `0.2500`
 - **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
@@ -44,7 +44,7 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 
 - **Expected:** Theo chính sách v2024 hiện hành, nhân viên có thâm niên từ 3 năm trở lên được cộng thêm 1 ngày phép cho mỗi 3 năm. Chính sách cũ v2023 yêu cầu 5 năm.
 - **Got:** Nhân viên có thâm niên từ **3 năm trở lên** được cộng thêm **1 ngày phép** cho mỗi 3 năm làm việc liên tục.
-- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.7921`, context_precision `0.5000`, context_recall `1.0000`
+- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.7902`, context_precision `0.5000`, context_recall `1.0000`
 - **Worst metric:** `context_precision` = `0.5000`
 - **Error Tree:** Output sai/chưa đủ → kiểm tra `context_precision` → Retrieval precision failure: irrelevant chunks remain in the final context.
 - **Root cause:** Retrieval precision failure: irrelevant chunks remain in the final context.
@@ -53,37 +53,37 @@ Phân tích được sinh từ RAGAS thực tế. Ground truth chỉ dùng ở b
 ### #4 — Nhân viên được tài trợ khóa học 25 triệu, nghỉ việc sau 8 tháng hoàn thành khóa học. Phải hoàn trả bao nhiêu?
 
 - **Expected:** Nhân viên phải cam kết làm việc ít nhất 1 năm sau khi hoàn thành khóa học. Nghỉ sau 8 tháng là trước hạn cam kết, phải hoàn trả 100% chi phí tức 25.000.000 VNĐ.
-- **Got:** Nhân viên phải hoàn trả **100% chi phí** đào tạo đã được tài trợ, tức là **25.000.000 VNĐ**.
-- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.7986`, context_precision `1.0000`, context_recall `1.0000`
+- **Got:** Nhân viên phải hoàn trả 100% chi phí đào tạo đã được tài trợ, tức là 25 triệu VNĐ.
+- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.7960`, context_precision `1.0000`, context_recall `1.0000`
 - **Worst metric:** `faithfulness` = `0.5000`
 - **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
 - **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
 
-### #5 — Nhân viên thử việc có được hưởng bảo hiểm sức khỏe PVI không?
+### #5 — Có cần kích hoạt xác thực đa yếu tố (MFA) không?
 
-- **Expected:** KHÔNG. Nhân viên thử việc chưa được hưởng gói bảo hiểm sức khỏe PVI. Chỉ được tham gia bảo hiểm xã hội bắt buộc.
-- **Got:** Nhân viên thử việc chưa được hưởng gói bảo hiểm sức khỏe PVI. Họ chỉ được tham gia bảo hiểm xã hội bắt buộc.
-- **Metrics:** faithfulness `0.5000`, answer_relevancy `0.8085`, context_precision `1.0000`, context_recall `1.0000`
-- **Worst metric:** `faithfulness` = `0.5000`
-- **Error Tree:** Output sai/chưa đủ → kiểm tra `faithfulness` → Generation failure: answer contains claims insufficiently supported by retrieved context.
-- **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
-- **Suggested fix:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
+- **Expected:** Có, theo chính sách mật khẩu v2.0 hiện hành, tất cả nhân viên bắt buộc kích hoạt MFA cho email, VPN và hệ thống nội bộ. Chính sách cũ v1.0 không yêu cầu MFA.
+- **Got:** Có, tất cả nhân viên bắt buộc phải kích hoạt MFA cho tài khoản email, VPN và các hệ thống nội bộ.
+- **Metrics:** faithfulness `1.0000`, answer_relevancy `0.8079`, context_precision `1.0000`, context_recall `0.5000`
+- **Worst metric:** `context_recall` = `0.5000`
+- **Error Tree:** Output sai/chưa đủ → kiểm tra `context_recall` → Retrieval recall failure: one or more ground-truth facts are missing from retrieved chunks.
+- **Root cause:** Retrieval recall failure: one or more ground-truth facts are missing from retrieved chunks.
+- **Suggested fix:** Improve chunking, hybrid retrieval, parent expansion, or increase candidate recall before reranking.
 
 ## Case Study
 
-**Question:** Một nhân viên Senior có 9 năm thâm niên được nghỉ bao nhiêu ngày phép năm và lương trong khoảng nào?
+**Question:** Lương thử việc của nhân viên Junior mức cao nhất là bao nhiêu?
 
-**Expected:** Theo chính sách v2024: 15 ngày cơ bản + 3 ngày thâm niên (9÷3=3) = 18 ngày phép. Lương Senior (P3-P4): 20-35 triệu VNĐ/tháng.
+**Expected:** Junior cao nhất là 20.000.000 VNĐ/tháng. Lương thử việc = 85% x 20.000.000 = 17.000.000 VNĐ/tháng.
 
-**Got:** Nhân viên có 9 năm thâm niên được nghỉ **18 ngày phép năm** (15 + 3). Lương không được đề cập trong tài liệu, nên không có thông tin về khoảng lương.
+**Got:** Lương thử việc của nhân viên Junior mức cao nhất là 17.000.000 VNĐ/tháng.
 
 ### Error Tree walkthrough
 
 1. **Output đúng?** → So sánh `Got` với `Expected` và metric thấp nhất.
-2. **Context đúng?** → Worst metric hiện tại là `answer_relevancy`; dùng metric này để xác định retrieval hay generation là nút lỗi chính.
-3. **Root cause:** Generation relevance failure: the answer does not directly address the user question.
-4. **Fix ở bước:** Use a more explicit answer format and instruct the model to answer the requested quantity/decision first.
+2. **Context đúng?** → Worst metric hiện tại là `faithfulness`; dùng metric này để xác định retrieval hay generation là nút lỗi chính.
+3. **Root cause:** Generation failure: answer contains claims insufficiently supported by retrieved context.
+4. **Fix ở bước:** Tighten the grounded-answer prompt, reduce generation freedom, and ensure supporting context is included.
 
 ### Nếu có thêm 1 giờ
 

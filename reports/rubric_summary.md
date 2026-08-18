@@ -4,10 +4,10 @@
 
 | Metric | Score | >=0.70 | >=0.75 |
 |---|---:|:---:|:---:|
-| faithfulness | 0.8125 | ✅ | ✅ |
-| answer_relevancy | 0.8047 | ✅ | ✅ |
-| context_precision | 0.9500 | ✅ | ✅ |
-| context_recall | 0.9500 | ✅ | ✅ |
+| faithfulness | 0.8375 | ✅ | ✅ |
+| answer_relevancy | 0.8355 | ✅ | ✅ |
+| context_precision | 0.9417 | ✅ | ✅ |
+| context_recall | 0.9750 | ✅ | ✅ |
 
 ## Estimated rubric score
 
