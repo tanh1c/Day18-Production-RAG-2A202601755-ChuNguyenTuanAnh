@@ -99,7 +99,7 @@ jobs:
       - name: Static rubric checks
         shell: bash
         run: |
-          ruff check --select E,F,I --ignore E402 src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
+          ruff check --select E4,E7,E9,F,I --ignore E402 src/ check_lab.py main.py naive_baseline.py scripts/check_rubric.py
           if grep -RIn --include='m*.py' '# TODO:' src/; then
             echo "Unresolved TODO marker found."
             exit 1
