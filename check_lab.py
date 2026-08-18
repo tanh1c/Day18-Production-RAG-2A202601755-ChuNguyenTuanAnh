@@ -130,7 +130,15 @@ def validate() -> int:
         ("[Tên nhóm]", "[Tên 1", "(copy template)", "**Question:**\n- **Expected:**"),
     ):
         errors += 1
-    check_file("analysis/group_report.md", required=False)
+
+    group_path = "analysis/group_report.md"
+    if not check_file(group_path):
+        errors += 1
+    elif not check_text_not_template(
+        group_path,
+        ("**Nhóm:** [Tên]", "| Faithfulness | | | |", "☐", "**Biggest improvement:**\n"),
+    ):
+        errors += 1
 
     print("\n👤 Individual reflection:")
     assignment_reflection = "analysis/reflection_ChuNguyenTuanAnh.md"
