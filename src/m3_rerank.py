@@ -10,6 +10,8 @@ from dataclasses import dataclass
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import RERANK_TOP_K  # noqa: E402
 
+_MODEL_CACHE: dict[str, object] = {}
+
 
 @dataclass
 class RerankResult:
@@ -26,11 +28,13 @@ class CrossEncoderReranker:
         self._model = None
 
     def _load_model(self):
-        """Lazy-load the requested sentence-transformers cross-encoder."""
+        """Lazy-load and process-cache the requested sentence-transformers model."""
         if self._model is None:
-            from sentence_transformers import CrossEncoder
+            if self.model_name not in _MODEL_CACHE:
+                from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(self.model_name)
+                _MODEL_CACHE[self.model_name] = CrossEncoder(self.model_name)
+            self._model = _MODEL_CACHE[self.model_name]
         return self._model
 
     def rerank(
@@ -99,9 +103,7 @@ class FlashrankReranker:
             {"id": index, "text": document["text"]}
             for index, document in enumerate(documents)
         ]
-        response = self._model.rerank(
-            RerankRequest(query=query, passages=passages)
-        )
+        response = self._model.rerank(RerankRequest(query=query, passages=passages))
         results: list[RerankResult] = []
         for rank, item in enumerate(response[:top_k], start=1):
             original = documents[int(item.get("id", rank - 1))]
