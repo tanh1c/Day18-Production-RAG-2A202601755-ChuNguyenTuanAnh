@@ -64,7 +64,7 @@ def run_tests() -> tuple[int, int, int]:
             timeout=1200,
             check=False,
         )
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         print(f"  ❌ pytest error: {exc}")
         return 0, 0, 1
 
@@ -89,21 +89,19 @@ def validate() -> int:
 
     print("\n📊 Reports:")
     report_path = "reports/ragas_report.json"
-    if not check_file(report_path):
-        errors += 1
-    elif not check_json(report_path, ["aggregate", "num_questions", "failures"]):
+    if not check_file(report_path) or not check_json(
+        report_path, ["aggregate", "num_questions", "failures"]
+    ):
         errors += 1
 
     baseline_path = "reports/naive_baseline_report.json"
-    if not check_file(baseline_path):
-        errors += 1
-    elif not check_json(baseline_path, ["aggregate", "num_questions"]):
+    if not check_file(baseline_path) or not check_json(
+        baseline_path, ["aggregate", "num_questions"]
+    ):
         errors += 1
 
     latency_path = "reports/latency_report.json"
-    if not check_file(latency_path):
-        errors += 1
-    elif not check_json(latency_path, ["unit", "timings"]):
+    if not check_file(latency_path) or not check_json(latency_path, ["unit", "timings"]):
         errors += 1
     if not check_file("reports/latency_report.md"):
         errors += 1
